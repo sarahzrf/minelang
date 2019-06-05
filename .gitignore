@@ -1,0 +1,15 @@
+.*.swp
+# github says I should ignore these.
+# who am I to ignore github?
+dist
+cabal-dev
+*.o
+*.hi
+*.chi
+*.chs.h
+.virtualenv
+.hsenv
+.cabal-sandbox/
+cabal.sandbox.config
+cabal.config
+
