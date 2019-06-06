@@ -64,15 +64,15 @@ type Env = Map Symbol LispVal
 specialForms :: [String]
 specialForms = words "cons car cdr + - * progn set lambda"
 
-checkSym :: Symbol -> StateT Env (Either String) ()
+checkSym :: MonadError String m => Symbol -> m Symbol
 checkSym sym
   | sym `elem` specialForms = throwError "reserved name"
-  | otherwise = return ()
+  | otherwise = return sym
 
 eval :: LispTerm -> StateT Env (Either String) LispVal
 eval (IntTerm n) = return (IntVal n)
 eval (SymTerm sym) = do
-  checkSym sym
+  void $ checkSym sym
   mv <- gets (M.lookup sym)
   maybe (throwError "unbound variable") return mv
 eval app = case getListTerm app of
@@ -95,12 +95,12 @@ eval app = case getListTerm app of
     vs <- traverse eval ts
     if null vs then return NilVal else return (last vs)
   Just [SymTerm "set", SymTerm sym, t] -> do
-    checkSym sym
+    void $ checkSym sym
     v <- eval t
     modify (M.insert sym v)
     return v
   Just [SymTerm "lambda", paramsT, body] -> do
-    let getParam (SymTerm sym) = return sym
+    let getParam (SymTerm sym) = checkSym sym
         getParam _ = throwError "bad param"
         pm = getListTerm paramsT
     params <- maybe (throwError "bad params") (traverse getParam) pm
