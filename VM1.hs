@@ -2,32 +2,28 @@
 module VM1 where
 
 import Control.Monad.State
-import Control.Monad.Except
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.List
 
-import Lisp
+import Lang hiding (Arith)
+import qualified Lang
 
 type ProcId = Int
 type Index = Int
 data Literal
   = IntLit Int
-  | NilLit
-  | ConsLit Literal Literal
+  | EmptyLit
   deriving (Show, Eq, Ord)
-data Step = InCar | InCdr deriving (Show, Eq, Ord)
-type Path = [Step]
+type Path = [Symbol]
 data Location
   = OnStack Index Path
-  | InScope String
+  | InScope Path
   deriving (Show, Eq, Ord)
 data Source = Lit Literal | Ref Location deriving (Show, Eq, Ord)
-data Op = Add | Sub | Mul deriving (Show, Eq, Ord)
 data Instruction
   = Store Location Source
   | Push Index Source
-  | Cons
   | Pop Index
   | Arith Op
   | MkFun ProcId
@@ -36,7 +32,7 @@ data Instruction
 type Proc = [Instruction]
 type Program = Map ProcId Proc
 
-type CompilerM = StateT (ProcId, Program) (Either String)
+type CompilerM = State (ProcId, Program)
 
 save :: Proc -> CompilerM ProcId
 save proc = state $
@@ -45,53 +41,42 @@ save proc = state $
 -- Produces a series of instructions whose execution causes the result of
 -- evaluating the term to be stored at the top of the stack.
 -- TODO error checking?
-compile :: LispTerm -> CompilerM Proc
-compile (IntTerm n) = return [Push 0 (Lit (IntLit n))]
-compile (SymTerm sym) = do
-  void $ checkSym sym
-  return [Push 0 (Ref (InScope sym))]
-compile app = case getListTerm app of
-  Just [] -> return [Push 0 (Lit NilLit)]
-  Just [SymTerm "cons", car, cdr] -> do
-    p1 <- compile car
-    p2 <- compile cdr
-    return (p1 ++ p2 ++ [Cons])
-  Just [SymTerm sym, t]
-    | Just step <- lookup sym [("car", InCar), ("cdr", InCdr)] -> do
-      p <- compile t
-      return (p ++ [Push 0 (Ref (OnStack 0 [step])), Pop 1])
-  Just [SymTerm sym, t1, t2]
-    | Just op <- lookup sym [("+", Add), ("*", Mul), ("-", Sub)] -> do
-      p1 <- compile t1
-      p2 <- compile t2
-      return (p1 ++ p2 ++ [Arith op])
-  Just (SymTerm "progn":ts) -> do
-    ps <- traverse compile ts
-    if null ps then return [Push 0 (Lit NilLit)]
-               else return (intercalate [Pop 0] ps)
-  Just [SymTerm "set", SymTerm sym, t] -> do
-    void $ checkSym sym
-    p <- compile t
-    return (p ++ [Store (InScope sym) (Ref (OnStack 0 []))])
-  Just [SymTerm "lambda", paramsT, body] -> do
-    let getParam (SymTerm sym) = checkSym sym
-        getParam _ = throwError "bad param"
-        pm = getListTerm paramsT
-    params <- maybe (throwError "bad params") (traverse getParam) pm
-    let loadArgs = reverse params >>= \param ->
-          [Store (InScope param) (Ref (OnStack 0 [])), Pop 0]
-    p <- compile body
-    procId <- save (loadArgs ++ p)
-    return [MkFun procId]
-  Just (fnT:argsT) -> do
-    fn <- compile fnT
-    args <- traverse compile argsT
-    let skip = length args
-    return (fn ++ concat args ++
-            [Push 0 (Ref (OnStack skip [])), Pop (skip + 1), Call])
-  _ -> throwError "bad application"
+compile :: Expr -> CompilerM Proc
+compile (IntExpr n) = return [Push 0 (Lit (IntLit n))]
+compile (Var sym) = return [Push 0 (Ref (InScope [sym]))]
+compile (CompoundExpr cexpr) = do
+  ps <- traverse (compile . snd) cexpr
+  let populate = reverse cexpr >>=
+        \(key, _) -> [Store (OnStack 0 [key]) (Ref (OnStack 1 [])), Pop 1]
+  return (concat ps ++ [Push 0 (Lit EmptyLit)] ++ populate)
+compile (Proj key expr) = do
+  p <- compile expr
+  return (p ++ [Push 0 (Ref (OnStack 0 [key])), Pop 1])
+compile (Lang.Arith op expr1 expr2) = do
+  p1 <- compile expr1
+  p2 <- compile expr2
+  return (p1 ++ p2 ++ [Arith op])
+compile (Progn exprs) = do
+  ps <- traverse compile exprs
+  if null ps then return [Push 0 (Lit (IntLit 0))]
+             else return (intercalate [Pop 0] ps)
+compile (Assign sym expr) = do
+  p <- compile expr
+  return (p ++ [Store (InScope [sym]) (Ref (OnStack 0 []))])
+compile (Lam params body) = do
+  let loadArgs = reverse params >>= \param ->
+        [Store (InScope [param]) (Ref (OnStack 0 [])), Pop 0]
+  p <- compile body
+  procId <- save (loadArgs ++ p)
+  return [MkFun procId]
+compile (App fnExpr argExprs) = do
+  fn <- compile fnExpr
+  args <- traverse compile argExprs
+  let skip = length args
+  return (fn ++ concat args ++
+          [Push 0 (Ref (OnStack skip [])), Pop (skip + 1), Call])
 
-compile' :: LispTerm -> Either String (ProcId, Program)
-compile' t = tweak <$> runStateT (compile t >>= save) (0, M.empty)
+compile' :: Expr -> (ProcId, Program)
+compile' t = tweak $ runState (compile t >>= save) (0, M.empty)
   where tweak (mainId, (_, prog)) = (mainId, prog)
 
