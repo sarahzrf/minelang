@@ -1,6 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE TypeFamilies #-}
 module Lang where
 
@@ -25,8 +22,8 @@ data Expr
   = IntExpr Int
   | Var Symbol
   | CompoundExpr [(Symbol, Expr)]
-  | Proj Symbol Expr
-  | Arith Op Expr Expr
+  | ProjExpr Symbol Expr
+  | ArithExpr Op Expr Expr
   | Progn [Expr]
   | Assign Symbol Expr
   | Lam [Symbol] Expr
@@ -41,9 +38,9 @@ instance IsList Expr where
   fromList (fn:args) = App fn args
   toList = error "fake instance"
 instance Num Expr where
-  expr1 + expr2 = Arith Add expr1 expr2
-  expr1 - expr2 = Arith Sub expr1 expr2
-  expr1 * expr2 = Arith Mul expr1 expr2
+  expr1 + expr2 = ArithExpr Add expr1 expr2
+  expr1 - expr2 = ArithExpr Sub expr1 expr2
+  expr1 * expr2 = ArithExpr Mul expr1 expr2
   abs = error "fake instance"
   signum = error "fake instance"
   fromInteger = IntExpr . fromInteger
@@ -64,13 +61,13 @@ eval expr' = case expr' of
     maybe (throwError "unbound variable") return mv
   CompoundExpr cexpr ->
     CompoundVal . M.fromList . getCompose <$> traverse eval (Compose cexpr)
-  Proj key expr -> do
+  ProjExpr key expr -> do
     m <- eval expr
     case m of
       CompoundVal c | Just v <- M.lookup key c -> return v
                     | otherwise -> throwError "nonexistent key"
       _ -> throwError "not a compound"
-  Arith op expr1 expr2 -> do
+  ArithExpr op expr1 expr2 -> do
     v1 <- eval expr1
     v2 <- eval expr2
     case (v1, v2) of
