@@ -22,7 +22,7 @@ data Token
   | SemiT
   | EqT
   | ArrT
-  | IfT | ThenT | ElseT
+  | IfkT | IfT | ThenT | ElseT
   deriving (Show, Eq)
 
 tokChars :: [(Token, Char)]
@@ -47,7 +47,7 @@ tokenName t = case t of
   NatT n -> "number " ++ show n
   VarT v -> "variable " ++ q v
   ArrT -> q "->"
-  IfT -> q "if"; ThenT -> q "then"; ElseT -> q "else"
+  IfkT -> q "ifk"; IfT -> q "if"; ThenT -> q "then"; ElseT -> q "else"
   _ | Just c <- lookup t tokChars -> q [c]
     | otherwise -> error "No such token?!"
   where q = show
@@ -65,7 +65,7 @@ tokenize (c:cs) | isAlpha c || c == '_' = tok <:> tokenize rest
   where validInVar c' = isAlphaNum c' || c' `elem` "'_"
         (name, rest) = span validInVar (c:cs)
         tok = case name of
-          "if" -> IfT; "then" -> ThenT; "else" -> ElseT
+          "ifk" -> IfkT; "if" -> IfT; "then" -> ThenT; "else" -> ElseT
           v -> VarT v
 tokenize (c:cs) | c `elem` digits = tok <:> tokenize rest
   where digits = ['0'..'9']
@@ -116,7 +116,20 @@ exprG = mdo
             \[Just (MPSym s), _, _] [e] -> Assign s e),
            ([mpParams, tok' ArrT, Nothing],
             RightAssoc, \[Just (MPParams params), _, _] [body] ->
-              Lam params body)],
+              Lam Nothing params body),
+           ([mpSym, mpParams, tok' ArrT, Nothing], RightAssoc,
+            \[Just (MPSym s), Just (MPParams params), _, _] [body] ->
+              Lam (Just s) params body),
+           ([mpSym, mpParams, tok' EqT, Nothing], RightAssoc,
+            \[Just (MPSym s), Just (MPParams params), _, _] [body] ->
+              Assign s (Lam (Just s) params body)),
+           ([tok' IfkT, Nothing, tok' DotT, mpSym, tok' ThenT, Nothing,
+             tok' ElseT, Nothing], RightAssoc,
+            \[_, _, _, Just (MPSym key), _, _, _, _] [cond, th, el] ->
+              IfKeyExpr cond key th el),
+           ([tok' IfT, Nothing, tok' ThenT, Nothing,
+             tok' ElseT, Nothing], RightAssoc,
+            \[_, _, _, _, _, _] [cond, th, el] -> IfExpr cond th el)],
           [([Nothing, tok' AddT, Nothing], LeftAssoc,
             \[_, _, _] [a, b] -> ArithExpr Add a b),
            ([Nothing, tok' SubT, Nothing], LeftAssoc,

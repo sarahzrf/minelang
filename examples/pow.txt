@@ -1,0 +1,5 @@
+{
+    pow(base, exp) = (if exp then () -> base * pow(base, exp - 1)
+                             else () -> 1)();
+    pow(2, 16);
+}

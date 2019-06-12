@@ -1,7 +1,7 @@
 module VM1 where
 
 import Control.Monad.State
-import Control.Monad.Reader
+import Control.Monad.RWS
 import Control.Monad.Except
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -30,15 +30,17 @@ data Instruction
   | ArithInstr Op
   | MkFun ProcId
   | Call
+  | IfKeyInstr Symbol
+  | IfInstr
   deriving (Show, Eq, Ord)
 type Proc = [Instruction]
 type Program = Map ProcId Proc
 
 type CompilerM = State (ProcId, Program)
 
-save :: Proc -> CompilerM ProcId
+save :: (ProcId -> Proc) -> CompilerM ProcId
 save proc = state $
-  \(nextId, prog) -> (nextId, (nextId + 1, M.insert nextId proc prog))
+  \(nextId, prog) -> (nextId, (nextId + 1, M.insert nextId (proc nextId) prog))
 
 -- Produces a series of instructions whose execution causes the result of
 -- evaluating the term to be stored at the top of the stack.
@@ -64,11 +66,14 @@ compile (Progn exprs) = do
 compile (Assign sym expr) = do
   p <- compile expr
   return (p ++ [StoreEnv sym (Ref (OnStack 0))])
-compile (Lam params body) = do
-  let loadArgs = reverse params >>= \param ->
-        [StoreEnv param (Ref (OnStack 0)), Pop 0]
+compile (Lam name params body) = do
   p <- compile body
-  procId <- save (loadArgs ++ p)
+  let selfRef ownId = case name of
+        Nothing -> []
+        Just sym -> [MkFun ownId, StoreEnv sym (Ref (OnStack 0)), Pop 0]
+      loadArgs = reverse params >>= \param ->
+        [StoreEnv param (Ref (OnStack 0)), Pop 0]
+  procId <- save (\ownId -> selfRef ownId ++ loadArgs ++ p)
   return [MkFun procId]
 compile (App fnExpr argExprs) = do
   fn <- compile fnExpr
@@ -76,9 +81,21 @@ compile (App fnExpr argExprs) = do
   let skip = length args
   return (fn ++ concat args ++
           [Push 0 (Ref (OnStack skip)), Pop (skip + 1), Call])
+compile (IfKeyExpr cond key th el) = do
+  pCond <- compile cond
+  pTh   <- compile th
+  pEl   <- compile el
+  return (concat [pCond, pTh, pEl,
+    [Push 0 (Ref (OnStack 2)), Pop 3, IfKeyInstr key]])
+compile (IfExpr cond th el) = do
+  pCond <- compile cond
+  pTh   <- compile th
+  pEl   <- compile el
+  return (concat [pCond, pTh, pEl,
+    [Push 0 (Ref (OnStack 2)), Pop 3, IfInstr]])
 
 compile' :: Expr -> (ProcId, Program)
-compile' t = tweak $ runState (compile t >>= save) (0, M.empty)
+compile' t = tweak $ runState (compile t >>= save . const) (0, M.empty)
   where tweak (mainId, (_, prog)) = (mainId, prog)
 
 
@@ -90,7 +107,7 @@ data Val
 type Env = Map Symbol Val
 
 type VM1State = ([Val], Env)
-type VM1M = ReaderT Program (StateT VM1State (Either String))
+type VM1M = RWST Program (Sum Integer) VM1State (Either String)
 
 unwrap :: String -> VM1M (Maybe a) -> VM1M a
 unwrap err m = m >>= maybe (throwError err) return
@@ -146,8 +163,8 @@ runInstr instr = case instr of
     v <- unwrap "nonexistent key" (return (M.lookup key compound))
     push0 v
   ArithInstr op -> do
-    v1 <- pop0
     v2 <- pop0
+    v1 <- pop0
     case (v1, v2) of
       (IntVal n, IntVal m) -> push0 (IntVal (runOp op n m))
       _ -> throwError "not ints"
@@ -161,16 +178,34 @@ runInstr instr = case instr of
     modify (second (const closure))
     runProc procId
     modify (second (const saved))
+  IfKeyInstr key -> do
+    vCond <- pop0
+    vEl <- pop0
+    vTh <- pop0
+    case vCond of
+      CompoundVal c | key `M.member` c -> push0 vTh
+                    | otherwise -> push0 vEl
+      _ -> throwError "not a compound"
+  IfInstr -> do
+    vCond <- pop0
+    vEl <- pop0
+    vTh <- pop0
+    case vCond of
+      IntVal 0 -> push0 vEl
+      IntVal _ -> push0 vTh
+      _ -> throwError "not an int"
 
 runProc :: ProcId -> VM1M ()
 runProc procId = do
+  tell 1
   p <- unwrap "no such proc" (asks (M.lookup procId))
   mapM_ runInstr p
+  tell 1
 
-runProc' :: (ProcId, Program) -> Either String Val
+runProc' :: (ProcId, Program) -> Either String (Val, Integer)
 runProc' (procId, prog) = case e of
-    Right (v:_, _) -> Right v
-    Right ([], _) -> Left "no result?!"
+    Right ((v:_, _), Sum n) -> Right (v, n)
+    Right (([], _), _) -> Left "no result?!"
     Left err -> Left err
-  where e = execStateT (runReaderT (runProc procId) prog) ([], M.empty)
+  where e = execRWST (runProc procId) prog ([], M.empty)
 

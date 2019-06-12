@@ -56,10 +56,10 @@ compileInstr instr = case instr of
   ArithInstr op ->
     let opName = case op of Add -> "+="; Sub -> "-="; Mul -> "*="
     in mapM_ append [
-      "execute store result score a math run data get block ~ ~ ~-3 " ++
+      "execute store result score b math run data get block ~ ~ ~-3 " ++
       "Items[0].tag.stack[0].ival",
       "data remove block ~ ~ ~-3 Items[0].tag.stack[0]",
-      "execute store result score b math run data get block ~ ~ ~-3 " ++
+      "execute store result score a math run data get block ~ ~ ~-3 " ++
       "Items[0].tag.stack[0].ival",
       "scoreboard players operation a math " ++ opName ++ " b math",
       "execute store result block ~ ~ ~-3 Items[0].tag.stack[0].ival int 1 " ++
@@ -84,6 +84,20 @@ compileInstr instr = case instr of
       "data remove block ~ ~ ~-3 Items[0].tag.stack[0]",
       "setblock ~-2 ~ ~ minecraft:redstone_block"]
     modify (\(_, prog) -> (blockId', M.insert blockId' [] prog))
+  IfKeyInstr key -> mapM_ append [
+    "execute if data block ~ ~ ~-3 Items[0].tag.stack[0]." ++ show key ++
+    " run data remove block ~ ~ ~-3 Items[0].tag.stack[1]",
+    "execute unless data block ~ ~ ~-3 Items[0].tag.stack[0]." ++ show key ++
+    " run data remove block ~ ~ ~-3 Items[0].tag.stack[2]",
+    "data remove block ~ ~ ~-3 Items[0].tag.stack[0]"]
+  IfInstr -> mapM_ append [
+    "execute store result score a math run data get block ~ ~ ~-3 " ++
+    "Items[0].tag.stack[0].ival",
+    "data remove block ~ ~ ~-3 Items[0].tag.stack[0]",
+    "execute unless score a math matches 0" ++
+    " run data remove block ~ ~ ~-3 Items[0].tag.stack[0]",
+    "execute if score a math matches 0" ++
+    " run data remove block ~ ~ ~-3 Items[0].tag.stack[1]"]
 
 compileProc :: ProcId -> Proc -> CompilerM ()
 compileProc procId p = do

@@ -26,8 +26,12 @@ data Expr
   | ArithExpr Op Expr Expr
   | Progn [Expr]
   | Assign Symbol Expr
-  | Lam [Symbol] Expr
+  | Lam (Maybe Symbol) [Symbol] Expr
   | App Expr [Expr]
+  -- TODO Make proper conditionals instead of ones that
+  -- always evaluate their operands!!!
+  | IfKeyExpr Expr Symbol Expr Expr
+  | IfExpr Expr Expr Expr
   deriving (Show, Eq, Ord)
 
 instance IsString Expr where
@@ -49,7 +53,7 @@ instance Num Expr where
 data Val
   = IntVal Int
   | CompoundVal (Map Symbol Val)
-  | FunVal [Symbol] Expr Env
+  | FunVal (Maybe Symbol) [Symbol] Expr Env
   deriving (Show, Eq, Ord)
 type Env = Map Symbol Val
 
@@ -79,17 +83,34 @@ eval expr' = case expr' of
     v <- eval expr
     modify (M.insert sym v)
     return v
-  Lam params body -> FunVal params body <$> get
+  Lam name params body -> FunVal name params body <$> get
   App fnExpr argsExpr -> do
     fn <- eval fnExpr
     args <- traverse eval argsExpr
     case fn of
-      FunVal params body closure
+      FunVal name params body closure
         | length params == length args ->
-          let env = closure `M.union` M.fromList (zip params args)
+          let selfRef = maybe M.empty (flip M.singleton fn) name
+              env = M.unions [M.fromList (zip params args), selfRef, closure]
           in lift (evalStateT (eval body) env)
         | otherwise -> throwError "wrong number of arguments"
       _ -> throwError "not a function"
+  IfKeyExpr cond key th el -> do
+    m <- eval cond
+    vTh <- eval th
+    vEl <- eval el
+    case m of
+      CompoundVal c | key `M.member` c -> return vTh
+                    | otherwise -> return vEl
+      _ -> throwError "not a compound"
+  IfExpr cond th el -> do
+    m <- eval cond
+    vTh <- eval th
+    vEl <- eval el
+    case m of
+      IntVal 0 -> return vEl
+      IntVal _ -> return vTh
+      _ -> throwError "not an int"
 
 eval' :: Expr -> Either String Val
 eval' t = evalStateT (eval t) M.empty

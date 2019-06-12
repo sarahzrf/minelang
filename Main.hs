@@ -1,11 +1,13 @@
-module Write where
+module Main where
 
 import qualified Data.Map as M
 import Control.Monad
 
+import Parse
+import VM1
 import Commands
 
-writeProg :: (Command, Program) -> IO ()
+writeProg :: (Command, Commands.Program) -> IO ()
 writeProg (main, prog) = do
   void $ flip M.traverseWithKey prog $ \(f, b) block -> do
     let fn = "functions/f" ++ show f ++ "b" ++ show b ++ ".mcfunction"
@@ -17,4 +19,13 @@ writeProg (main, prog) = do
     "{stack: [{}], callstack: [{ret: 'tellraw @p {\"block\": \"~ ~ ~-3\", " ++
     "\"nbt\": \"Items[0].tag.stack[0]\"}'}]}}]",
     main]
+
+main :: IO ()
+main = do
+  code <- getContents
+  case parseExpr =<< tokenize code of
+    Left err -> putStrLn err
+    Right expr -> do
+      writeProg . compileProg' . compile' $ expr
+      putStrLn "Done!"
 
