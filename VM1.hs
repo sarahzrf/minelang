@@ -32,6 +32,7 @@ data Instruction
   | Call
   | IfKeyInstr Symbol
   | IfInstr
+  | CommandInstr String
   deriving (Show, Eq, Ord)
 type Proc = [Instruction]
 type Program = Map ProcId Proc
@@ -93,6 +94,7 @@ compile (IfExpr cond th el) = do
   pEl   <- compile el
   return (concat [pCond, pTh, pEl,
     [Push 0 (Ref (OnStack 2)), Pop 3, IfInstr]])
+compile (CommandExpr cmd) = return [CommandInstr cmd]
 
 compile' :: Expr -> (ProcId, Program)
 compile' t = tweak $ runState (compile t >>= save . const) (0, M.empty)
@@ -194,6 +196,7 @@ runInstr instr = case instr of
       IntVal 0 -> push0 vEl
       IntVal _ -> push0 vTh
       _ -> throwError "not an int"
+  CommandInstr _ -> push0 (IntVal 0)
 
 runProc :: ProcId -> VM1M ()
 runProc procId = do

@@ -32,6 +32,7 @@ data Expr
   -- always evaluate their operands!!!
   | IfKeyExpr Expr Symbol Expr Expr
   | IfExpr Expr Expr Expr
+  | CommandExpr String
   deriving (Show, Eq, Ord)
 
 instance IsString Expr where
@@ -111,6 +112,7 @@ eval expr' = case expr' of
       IntVal 0 -> return vEl
       IntVal _ -> return vTh
       _ -> throwError "not an int"
+  CommandExpr _ -> return (IntVal 0)
 
 eval' :: Expr -> Either String Val
 eval' t = evalStateT (eval t) M.empty

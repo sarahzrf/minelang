@@ -23,6 +23,7 @@ data Token
   | EqT
   | ArrT
   | IfkT | IfT | ThenT | ElseT
+  | CommandT String
   deriving (Show, Eq)
 
 tokChars :: [(Token, Char)]
@@ -58,6 +59,8 @@ a <:> fas = fmap (a:) fas
 tokenize :: String -> Either String [Token]
 tokenize [] = Right []
 tokenize ('-':'>':cs) = ArrT <:> tokenize cs
+tokenize ('`':cs) -- TODO allow escaping?
+  | (cmd, '`':cs') <- break (=='`') cs = CommandT cmd <:> tokenize cs'
 tokenize (c:cs)
   | Just tok <- lookup c charToks = tok <:> tokenize cs
   | isSpace c = tokenize cs
@@ -91,6 +94,8 @@ exprG = mdo
       toSym _ = Nothing
       toNat (NatT n) = Just n
       toNat _ = Nothing
+      toCmd (CommandT cmd) = Just cmd
+      toCmd _ = Nothing
       tok t = token t <?> tokenName t
   sym <- rule $ terminal toSym <?> "variable name"
   int <- rule $
@@ -101,9 +106,11 @@ exprG = mdo
     <* tok RBraceT
   progn <- rule . (<?> "progn") $
     tok LBraceT *> some (expr <* tok SemiT) <* tok RBraceT
+  command <- rule $ terminal toCmd <?> "command"
   atom <- rule . asum $ [
     Var <$> sym, IntExpr <$> int,
     CompoundExpr <$> compound, Progn <$> progn,
+    CommandExpr <$> command,
     tok LParenT *> expr <* tok RParenT]
   let tok' t   = Just (MPNone <$ tok t)
       mpSym    = Just $ MPSym <$> sym

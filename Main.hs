@@ -8,7 +8,7 @@ import VM1
 import Commands
 
 writeProg :: (Command, Commands.Program) -> IO ()
-writeProg (main, prog) = do
+writeProg (mainCmd, prog) = do
   void $ flip M.traverseWithKey prog $ \(f, b) block -> do
     let fn = "functions/f" ++ show f ++ "b" ++ show b ++ ".mcfunction"
     writeFile fn (unlines block)
@@ -18,7 +18,7 @@ writeProg (main, prog) = do
     "[{Slot: 0b, id: \"minecraft:redstone_block\", Count: 1b, tag: " ++
     "{stack: [{}], callstack: [{ret: 'tellraw @p {\"block\": \"~ ~ ~-3\", " ++
     "\"nbt\": \"Items[0].tag.stack[0]\"}'}]}}]",
-    main]
+    mainCmd]
 
 main :: IO ()
 main = do

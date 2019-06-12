@@ -98,6 +98,10 @@ compileInstr instr = case instr of
     " run data remove block ~ ~ ~-3 Items[0].tag.stack[0]",
     "execute if score a math matches 0" ++
     " run data remove block ~ ~ ~-3 Items[0].tag.stack[1]"]
+  CommandInstr cmd -> mapM_ append [
+    "data modify block ~ ~ ~-3 Items[0].tag.stack prepend value {}",
+    "execute store result block ~ ~ ~-3 Items[0].tag.stack[0].ival " ++
+    "int 1 run " ++ cmd]
 
 compileProc :: ProcId -> Proc -> CompilerM ()
 compileProc procId p = do
