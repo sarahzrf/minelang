@@ -1,8 +1,10 @@
 module Commands where
 
 import Control.Monad.State
+import Control.Monad.Reader
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Bifunctor
 
 import Lang (Op(..))
 import VM1 (ProcId, Literal(..), Location(..), Source(..),
@@ -13,8 +15,9 @@ type BlockId = (ProcId, Int)
 type Command = String
 type Block = [Command]
 type Program = Map BlockId Block
+type ProgramName = Maybe String
 
-type CompilerM = State (BlockId, Program)
+type CompilerM = ReaderT ProgramName (State (BlockId, Program))
 
 source :: Source -> String
 source src = case src of
@@ -30,8 +33,13 @@ append :: Command -> CompilerM ()
 append cmd = modify go
   where go (blockId, prog) = (blockId, M.adjust (++ [cmd]) blockId prog)
 
-jump :: BlockId -> Command
-jump (f, b) = concat ["function minelang:f", show f, "b", show b]
+jump :: BlockId -> ProgramName -> Command
+jump (f, b) progName =
+  concat ["function minelang:", dir, "f", show f, "b", show b]
+  where dir = maybe "" (++ "/") progName
+
+jump' :: BlockId -> CompilerM Command
+jump' = asks . jump
 
 compileInstr :: Instruction -> CompilerM ()
 compileInstr instr = case instr of
@@ -65,7 +73,7 @@ compileInstr instr = case instr of
       "execute store result block ~ ~ ~-3 Items[0].tag.stack[0].ival int 1 " ++
       "run scoreboard players get a math"]
   MkFun procId -> do
-    let cmd = jump (procId, 0)
+    cmd <- jump' (procId, 0)
     append . concat $ ["data modify block ~ ~ ~-3 Items[0].tag.stack ",
                        "prepend value {cmd: ", show cmd, "}"]
     append $ "data modify block ~ ~ ~-3 Items[0].tag.stack[0].closure " ++
@@ -73,7 +81,7 @@ compileInstr instr = case instr of
   Call -> do
     (procId, blockNo) <- gets fst
     let blockId' = (procId, blockNo + 1)
-        cmd = jump blockId'
+    cmd <- jump' blockId'
     mapM_ append [
       "data modify block ~ ~ ~-3 Items[0].tag.callstack " ++
       "prepend value {ret: " ++ show cmd ++ "}",
@@ -117,7 +125,8 @@ compileProc procId p = do
 compileProg :: VM1.Program -> CompilerM ()
 compileProg = void . M.traverseWithKey compileProc
 
-compileProg' :: (ProcId, VM1.Program) -> (Command, Program)
-compileProg' (procId, prog) = (jump (procId, 0), prog')
-  where (_, prog') = execState (compileProg prog) ((0, 0), M.empty)
+compileProg' :: ProgramName -> (ProcId, VM1.Program) -> (Command, Program)
+compileProg' name (procId, prog) = second snd $
+  runState (runReaderT act name) ((0, 0), M.empty)
+  where act = compileProg prog >> jump' (procId, 0)
 

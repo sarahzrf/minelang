@@ -84,16 +84,16 @@ compile (App fnExpr argExprs) = do
           [Push 0 (Ref (OnStack skip)), Pop (skip + 1), Call])
 compile (IfKeyExpr cond key th el) = do
   pCond <- compile cond
-  pTh   <- compile th
-  pEl   <- compile el
+  pTh   <- compile (Lam Nothing [] th)
+  pEl   <- compile (Lam Nothing [] el)
   return (concat [pCond, pTh, pEl,
-    [Push 0 (Ref (OnStack 2)), Pop 3, IfKeyInstr key]])
+    [Push 0 (Ref (OnStack 2)), Pop 3, IfKeyInstr key, Call]])
 compile (IfExpr cond th el) = do
   pCond <- compile cond
-  pTh   <- compile th
-  pEl   <- compile el
+  pTh   <- compile (Lam Nothing [] th)
+  pEl   <- compile (Lam Nothing [] el)
   return (concat [pCond, pTh, pEl,
-    [Push 0 (Ref (OnStack 2)), Pop 3, IfInstr]])
+    [Push 0 (Ref (OnStack 2)), Pop 3, IfInstr, Call]])
 compile (CommandExpr cmd) = return [CommandInstr cmd]
 
 compile' :: Expr -> (ProcId, Program)

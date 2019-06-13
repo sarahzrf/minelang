@@ -1,7 +1,6 @@
 {
     Z = f -> (x -> f(v -> x(x)(v)))(x -> f(v -> x(x)(v)));
-    sum = Z(self -> list -> (ifk list.car
-                             then () -> list.car + self(list.cdr)
-                             else () -> 0)());
+    sum = Z(self -> list ->
+        ifk list.car then list.car + self(list.cdr) else 0);
     sum({car: 1, cdr: {car: 2, cdr: {car: 3, cdr: {}}}});
 }

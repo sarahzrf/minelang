@@ -1,3 +1,3 @@
-(if `data get entity @p Pos[1]` - 56
-    then () -> `say Not on ground (Redstone Ready).`
-    else () -> `say On ground (Redstone Ready).`)()
+if `data get entity @p Pos[1]` - 56
+    then `say Not on ground (Redstone Ready).`
+    else `say On ground (Redstone Ready).`

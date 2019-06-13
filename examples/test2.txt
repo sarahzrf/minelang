@@ -1,5 +1,4 @@
 {
-    sum(list) = (ifk list.car then () -> list.car + sum(list.cdr)
-                              else () -> 0)();
+    sum(list) = ifk list.car then list.car + sum(list.cdr) else 0;
     sum({car: 1, cdr: {car: 2, cdr: {car: 3, cdr: {}}}});
 }

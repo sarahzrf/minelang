@@ -28,8 +28,6 @@ data Expr
   | Assign Symbol Expr
   | Lam (Maybe Symbol) [Symbol] Expr
   | App Expr [Expr]
-  -- TODO Make proper conditionals instead of ones that
-  -- always evaluate their operands!!!
   | IfKeyExpr Expr Symbol Expr Expr
   | IfExpr Expr Expr Expr
   | CommandExpr String
@@ -98,21 +96,20 @@ eval expr' = case expr' of
       _ -> throwError "not a function"
   IfKeyExpr cond key th el -> do
     m <- eval cond
-    vTh <- eval th
-    vEl <- eval el
     case m of
-      CompoundVal c | key `M.member` c -> return vTh
-                    | otherwise -> return vEl
+      CompoundVal c | key `M.member` c -> evalSubscope th
+                    | otherwise -> evalSubscope el
       _ -> throwError "not a compound"
   IfExpr cond th el -> do
     m <- eval cond
-    vTh <- eval th
-    vEl <- eval el
     case m of
-      IntVal 0 -> return vEl
-      IntVal _ -> return vTh
+      IntVal 0 -> evalSubscope el
+      IntVal _ -> evalSubscope th
       _ -> throwError "not an int"
   CommandExpr _ -> return (IntVal 0)
+
+evalSubscope :: Expr -> StateT Env (Either String) Val
+evalSubscope expr = eval (App (Lam Nothing [] expr) [])
 
 eval' :: Expr -> Either String Val
 eval' t = evalStateT (eval t) M.empty
