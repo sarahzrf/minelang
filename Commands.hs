@@ -22,15 +22,33 @@ type ProgramName = Maybe String
 
 type CompilerM = ReaderT ProgramName (State (BlockId, Program))
 
-storageSpot, pulseSpot, storage, stack, callstack, env, final :: String
-storageSpot = "~ ~ ~-3"
-pulseSpot = "~-2 ~ ~"
+storageSpot, pulseSpot, storage, stack, callstack, env, math :: String
+storageSpot = "~ ~1 ~"
+pulseSpot = "~ ~-2 ~"
 storage = "block " ++ storageSpot
 stack = storage ++ " Items[0].tag.stack"
 callstack = storage ++ " Items[0].tag.callstack"
 env = callstack ++ "[0].env"
-final =
-  [f|tellraw @p {{"block": "{storageSpot}", "nbt": "Items[0].tag.stack[0]"}}|]
+math = "minelang_math"
+
+setup :: Block
+setup = [
+  [f|fill ~ ~-2 ~ ~ ~1 ~ minecraft:air|],
+  [f|setblock ~ ~-1 ~ minecraft:command_block[facing=up]|] ++
+    [f|{{Command: "setblock ~ ~-1 ~ minecraft:air" }}|],
+  [f|setblock ~ ~ ~ minecraft:chain_command_block{{auto: 1b}}|],
+  [f|setblock ~ ~1 ~ minecraft:furnace{furnaceDat}|]]
+  where furnaceDat = "{Items: [{Slot: 0b, id: 'minecraft:redstone_block',\
+          \ Count: 1b, tag: {stack: [], callstack:\
+                             \ [{ret: 'function minelang:finish'}]}}]}"
+
+finish :: Block
+finish = [
+  [f|tellraw @p {finalMsg}|],
+  [f|fill ~ ~-2 ~ ~ ~1 ~ minecraft:air|]]
+  where finalMsg :: String
+        finalMsg =
+          [f|{{"block": "{storageSpot}", "nbt": "Items[0].tag.stack[0]"}}|]
 
 mod, rem, estore :: String
 mod = "data modify"
@@ -72,11 +90,11 @@ compileInstr instr = case instr of
   ArithInstr op ->
     let opName = case op of Add -> "+="; Sub -> "-="; Mul -> "*="
     in append [
-      [f|{estore} score a math run data get {stack}[1].ival|],
-      [f|{estore} score b math run data get {stack}[0].ival|],
+      [f|{estore} score a {math} run data get {stack}[1].ival|],
+      [f|{estore} score b {math} run data get {stack}[0].ival|],
       [f|{rem} {stack}[0]|],
-      [f|scoreboard players operation a math {opName} b math|],
-      [f|{estore} {stack}[0].ival int 1 run scoreboard players get a math|]]
+      [f|scoreboard players operation a {math} {opName} b {math}|],
+      [f|{estore} {stack}[0].ival int 1 run scoreboard players get a {math}|]]
   MkFun procId -> do
     cmd <- jump' (procId, 0)
     append [
@@ -98,10 +116,10 @@ compileInstr instr = case instr of
     [f|execute unless data {stack}[0].{show key} run {rem} {stack}[2]|],
     [f|{rem} {stack}[0]|]]
   IfInstr -> append [
-    [f|{estore} score a math run data get {stack}[0].ival|],
+    [f|{estore} score a {math} run data get {stack}[0].ival|],
     [f|{rem} {stack}[0]|],
-    [f|execute unless score a math matches 0 run {rem} {stack}[0]|],
-    [f|execute if score a math matches 0 run {rem} {stack}[1]|]]
+    [f|execute unless score a {math} matches 0 run {rem} {stack}[0]|],
+    [f|execute if score a {math} matches 0 run {rem} {stack}[1]|]]
   CommandInstr cmd -> append [
     [f|{mod} {stack} prepend value {{}}|],
     [f|{estore} {stack}[0].ival int 1 run {cmd}|]]

@@ -18,14 +18,19 @@ writeProg progName (mainCmd, prog) = do
   void $ flip M.traverseWithKey prog $ \(f, b) block -> do
     let filename = funcFilename $ "f" ++ show f ++ "b" ++ show b
     writeFile filename (unlines block)
-  writeFile (funcFilename "main") . unlines $ [
-    "data modify " ++ storage ++ " Items set value\
-    \ [{Slot: 0b, id: \"minecraft:redstone_block\", Count: 1b, tag:\
-    \ {stack: [{}], callstack: [{ret: '" ++ final ++ "'}]}}]",
-    mainCmd]
+  writeFile (funcFilename "main") . unlines $
+    ["function minelang:setup", mainCmd]
+
+writeSetupFinish :: IO ()
+writeSetupFinish = do
+  let funcFilename funcName = "functions" </> funcName <.> "mcfunction"
+  createDirectoryIfMissing True "functions"
+  writeFile (funcFilename "setup") . unlines $ setup
+  writeFile (funcFilename "finish") . unlines $ finish
 
 main :: IO ()
 main = do
+  writeSetupFinish
   filenames <- getArgs
   let single = length filenames == 1
   forM_ filenames $ \filename -> do
