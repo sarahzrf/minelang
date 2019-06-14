@@ -122,17 +122,27 @@ compileInstr instr = case instr of
     [f|execute if score a {math} matches 0 run {rem} {stack}[1]|]]
   CommandInstr cmd -> append [
     [f|{mod} {stack} prepend value {{}}|],
-    [f|{estore} {stack}[0].ival int 1 run {cmd}|]]
+    [f|{estore} {stack}[0].ival int 1 run {cmd'}|]]
+    where cmd' = cmd >>= expand
+          expand '$' = env ++ "."
+          expand c = [c]
 
 compileProc :: ProcId -> Proc -> CompilerM ()
+compileProc _ [] = return ()
 compileProc procId p = do
   let blockId = (procId, 0)
   modify (\(_, prog) -> (blockId, M.insert blockId [] prog))
-  mapM_ compileInstr p
-  append [
-    [f|{mod} block ~ ~ ~ Command set from {callstack}[0].ret|],
-    [f|{rem} {callstack}[0]|],
-    [f|setblock {pulseSpot} minecraft:redstone_block|]]
+  mapM_ compileInstr (init p)
+  case last p of
+    Call -> append [
+      [f|{mod} {env} set from {stack}[0].closure|],
+      [f|{mod} block ~ ~ ~ Command set from {stack}[0].cmd|],
+      [f|{rem} {stack}[0]|],
+      [f|setblock {pulseSpot} minecraft:redstone_block|]]
+    i -> compileInstr i >> append [
+      [f|{mod} block ~ ~ ~ Command set from {callstack}[0].ret|],
+      [f|{rem} {callstack}[0]|],
+      [f|setblock {pulseSpot} minecraft:redstone_block|]]
 
 compileProg :: VM1.Program -> CompilerM ()
 compileProg = void . M.traverseWithKey compileProc

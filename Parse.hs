@@ -58,6 +58,7 @@ a <:> fas = fmap (a:) fas
 
 tokenize :: String -> Either String [Token]
 tokenize [] = Right []
+tokenize ('#':cs) = tokenize (drop 1 (dropWhile (/='\n') cs))
 tokenize ('-':'>':cs) = ArrT <:> tokenize cs
 tokenize ('`':cs) -- TODO allow escaping?
   | (cmd, '`':cs') <- break (=='`') cs = CommandT cmd <:> tokenize cs'
