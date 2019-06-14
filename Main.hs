@@ -19,10 +19,9 @@ writeProg progName (mainCmd, prog) = do
     let filename = funcFilename $ "f" ++ show f ++ "b" ++ show b
     writeFile filename (unlines block)
   writeFile (funcFilename "main") . unlines $ [
-    "data modify block ~ ~ ~-3 Items set value " ++
-    "[{Slot: 0b, id: \"minecraft:redstone_block\", Count: 1b, tag: " ++
-    "{stack: [{}], callstack: [{ret: 'tellraw @p {\"block\": \"~ ~ ~-3\", " ++
-    "\"nbt\": \"Items[0].tag.stack[0]\"}'}]}}]",
+    "data modify " ++ storage ++ " Items set value\
+    \ [{Slot: 0b, id: \"minecraft:redstone_block\", Count: 1b, tag:\
+    \ {stack: [{}], callstack: [{ret: '" ++ final ++ "'}]}}]",
     mainCmd]
 
 main :: IO ()

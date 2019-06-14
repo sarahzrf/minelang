@@ -15,7 +15,7 @@ import Lang
 data Token
   = LParenT | RParenT
   | NatT Int
-  | VarT String
+  | SymT Symbol
   | LBraceT | RBraceT | ColonT | CommaT
   | DotT
   | AddT | SubT | MulT
@@ -46,7 +46,7 @@ charToks = map swap tokChars
 tokenName :: Token -> String
 tokenName t = case t of
   NatT n -> "number " ++ show n
-  VarT v -> "variable " ++ q v
+  SymT v -> "identifier " ++ show v
   ArrT -> q "->"
   IfkT -> q "ifk"; IfT -> q "if"; ThenT -> q "then"; ElseT -> q "else"
   _ | Just c <- lookup t tokChars -> q [c]
@@ -65,11 +65,11 @@ tokenize (c:cs)
   | Just tok <- lookup c charToks = tok <:> tokenize cs
   | isSpace c = tokenize cs
 tokenize (c:cs) | isAlpha c || c == '_' = tok <:> tokenize rest
-  where validInVar c' = isAlphaNum c' || c' `elem` "'_"
-        (name, rest) = span validInVar (c:cs)
+  where validInSym c' = isAlphaNum c' || c' `elem` "'_"
+        (name, rest) = span validInSym (c:cs)
         tok = case name of
           "ifk" -> IfkT; "if" -> IfT; "then" -> ThenT; "else" -> ElseT
-          v -> VarT v
+          v -> SymT (Symbol v)
 tokenize (c:cs) | c `elem` digits = tok <:> tokenize rest
   where digits = ['0'..'9']
         (lit, rest) = span (`elem` digits) (c:cs)
@@ -90,14 +90,14 @@ data MixfixPiece
   deriving (Eq, Show)
 exprG :: Grammar r (Prod r String Token Expr)
 exprG = mdo
-  let toSym (VarT v) = Just v
+  let toSym (SymT v) = Just v
       toSym _ = Nothing
       toNat (NatT n) = Just n
       toNat _ = Nothing
       toCmd (CommandT cmd) = Just cmd
       toCmd _ = Nothing
       tok t = token t <?> tokenName t
-  sym <- rule $ terminal toSym <?> "variable name"
+  sym <- rule $ terminal toSym <?> "identifier"
   int <- rule $
     terminal toNat <|> negate <$> (tok SubT *> terminal toNat) <?> "int"
   compound <- rule . (<?> "compound") $

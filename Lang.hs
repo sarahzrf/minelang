@@ -1,15 +1,15 @@
-{-# LANGUAGE TypeFamilies #-}
 module Lang where
 
-import Data.String
-import GHC.Exts
 import Control.Monad.State
 import Control.Monad.Except
 import Data.Functor.Compose
 import Data.Map (Map)
 import qualified Data.Map as M
 
-type Symbol = String
+newtype Symbol = Symbol {getSymbol :: String} deriving (Eq, Ord)
+-- This will be convenient for avoiding accidental unquoted interpolation of
+-- identifiers into output commands.
+instance Show Symbol where show (Symbol s) = show s
 
 data Op = Add | Sub | Mul deriving (Show, Eq, Ord)
 
@@ -32,21 +32,6 @@ data Expr
   | IfExpr Expr Expr Expr
   | CommandExpr String
   deriving (Show, Eq, Ord)
-
-instance IsString Expr where
-  fromString = Var
-instance IsList Expr where
-  type (Item Expr) = Expr
-  fromList [] = error "fake instance"
-  fromList (fn:args) = App fn args
-  toList = error "fake instance"
-instance Num Expr where
-  expr1 + expr2 = ArithExpr Add expr1 expr2
-  expr1 - expr2 = ArithExpr Sub expr1 expr2
-  expr1 * expr2 = ArithExpr Mul expr1 expr2
-  abs = error "fake instance"
-  signum = error "fake instance"
-  fromInteger = IntExpr . fromInteger
 
 
 data Val
