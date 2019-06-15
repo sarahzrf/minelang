@@ -1,4 +1,5 @@
 {
+    `scoreboard objectives setdisplay sidebar minelang_math`;
     fib(a, b) = fib(b, a + b);
     fib(1, 1);
 }

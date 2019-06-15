@@ -31,13 +31,17 @@ callstack = storage ++ " Items[0].tag.callstack"
 env = callstack ++ "[0].env"
 math = "minelang_math"
 
-setup :: Block
-setup = [
+-- TODO maybe leave room for ticks or something?
+genStart :: Command -> Block
+genStart mainCmd = [
   [f|fill ~ ~-2 ~ ~ ~1 ~ minecraft:air|],
-  [f|setblock ~ ~-1 ~ minecraft:command_block[facing=up]|] ++
-    [f|{{Command: "setblock ~ ~-1 ~ minecraft:air" }}|],
-  [f|setblock ~ ~ ~ minecraft:chain_command_block{{auto: 1b}}|],
-  [f|setblock ~ ~1 ~ minecraft:furnace{furnaceDat}|]]
+  [f|setblock ~ ~-1 ~ minecraft:chain_command_block[facing=up]|] ++
+    [f|{{Command: "Searge", auto: 1b, UpdateLastExecution: 0b}}|],
+  [f|setblock ~ ~ ~ minecraft:chain_command_block[facing=down]|] ++
+  [f|{{Command: {show mainCmd}, auto: 1b, UpdateLastExecution: 0b}}|],
+  [f|setblock ~ ~1 ~ minecraft:furnace{furnaceDat}|],
+  [f|setblock ~ ~-2 ~ minecraft:repeating_command_block[facing=up]|] ++
+    [f|{{Command: "setblock ~ ~ ~ minecraft:air", auto: 1b}}|]]
   where furnaceDat = "{Items: [{Slot: 0b, id: 'minecraft:redstone_block',\
           \ Count: 1b, tag: {stack: [], callstack:\
                              \ [{ret: 'function minelang:finish'}]}}]}"
@@ -108,8 +112,7 @@ compileInstr instr = case instr of
       [f|{mod} {callstack} prepend value {{ret: {show cmd}}}|],
       [f|{mod} {env} set from {stack}[0].closure|],
       [f|{mod} block ~ ~ ~ Command set from {stack}[0].cmd|],
-      [f|{rem} {stack}[0]|],
-      [f|setblock {pulseSpot} minecraft:redstone_block|]]
+      [f|{rem} {stack}[0]|]]
     modify (\(_, prog) -> (blockId', M.insert blockId' [] prog))
   IfKeyInstr key -> append [
     [f|execute if data {stack}[0].{show key} run {rem} {stack}[1]|],
@@ -137,12 +140,10 @@ compileProc procId p = do
     Call -> append [
       [f|{mod} {env} set from {stack}[0].closure|],
       [f|{mod} block ~ ~ ~ Command set from {stack}[0].cmd|],
-      [f|{rem} {stack}[0]|],
-      [f|setblock {pulseSpot} minecraft:redstone_block|]]
+      [f|{rem} {stack}[0]|]]
     i -> compileInstr i >> append [
       [f|{mod} block ~ ~ ~ Command set from {callstack}[0].ret|],
-      [f|{rem} {callstack}[0]|],
-      [f|setblock {pulseSpot} minecraft:redstone_block|]]
+      [f|{rem} {callstack}[0]|]]
 
 compileProg :: VM1.Program -> CompilerM ()
 compileProg = void . M.traverseWithKey compileProc

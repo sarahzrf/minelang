@@ -1,0 +1,25 @@
+{
+    `fill ~1 ~-1 ~1 ~53 ~-1 ~53 minecraft:sandstone`;
+    `fill ~2 ~-1 ~2 ~52 ~-1 ~52 minecraft:stone`;
+    `summon minecraft:armor_stand ~3 ~ ~3 {Tags: ["maze_carver"], HandItems: [{id: "minecraft:diamond_pickaxe", Count: 1b}], ShowArms: 1b}`;
+
+    while(check, body) = if check() then {body(); while(check, body);} else 0;
+    choose() = {
+        `execute at @e[tag=maze_carver,limit=1] if block ~2 ~-1 ~ stone run summon minecraft:armor_stand ~2 ~ ~ {Tags: ["carve_option"], Invisible: 1b}`;
+        `execute at @e[tag=maze_carver,limit=1] if block ~-2 ~-1 ~ stone run summon minecraft:armor_stand ~-2 ~ ~ {Tags: ["carve_option"], Invisible: 1b}`;
+        `execute at @e[tag=maze_carver,limit=1] if block ~ ~-1 ~2 stone run summon minecraft:armor_stand ~ ~ ~2 {Tags: ["carve_option"], Invisible: 1b}`;
+        `execute at @e[tag=maze_carver,limit=1] if block ~ ~-1 ~-2 stone run summon minecraft:armor_stand ~ ~ ~-2 {Tags: ["carve_option"], Invisible: 1b}`;
+        `execute as @e[tag=maze_carver,limit=1] at @s run tp @s ~ ~ ~ facing entity @e[tag=carve_option,sort=random,limit=1]`;
+        `kill @e[tag=carve_option]`;
+    };
+    dig() = while(choose, () -> {
+        `data modify $pos set from entity @e[tag=maze_carver,limit=1] Pos`;
+        `execute at @e[tag=maze_carver,limit=1] run fill ^ ^-1 ^1 ^ ^-1 ^2 sandstone`;
+        `execute as @e[tag=maze_carver,limit=1] at @s run tp ^ ^ ^2`;
+        dig();
+        `data modify entity @e[tag=maze_carver,limit=1] Pos set from $pos`;
+    });
+
+    dig();
+    `kill @e[tag=maze_carver]`;
+}
