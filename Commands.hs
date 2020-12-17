@@ -34,25 +34,32 @@ math = "minelang_math"
 -- TODO maybe leave room for ticks or something?
 genStart :: Command -> Block
 genStart mainCmd = [
-  [f|fill ~ ~-2 ~ ~ ~1 ~ minecraft:air|],
-  [f|setblock ~ ~-1 ~ minecraft:chain_command_block[facing=up]|] ++
-    [f|{{Command: "Searge", auto: 1b, UpdateLastExecution: 0b}}|],
-  [f|setblock ~ ~ ~ minecraft:chain_command_block[facing=down]|] ++
-  [f|{{Command: {show mainCmd}, auto: 1b, UpdateLastExecution: 0b}}|],
-  [f|setblock ~ ~1 ~ minecraft:furnace{furnaceDat}|],
-  [f|setblock ~ ~-2 ~ minecraft:repeating_command_block[facing=up]|] ++
-    [f|{{Command: "setblock ~ ~ ~ minecraft:air", auto: 1b}}|]]
+  [fmt|fill ~ ~-2 ~ ~ ~1 ~ minecraft:air|],
+  [fmt|setblock ~ ~-1 ~ minecraft:chain_command_block[facing=up]|] ++
+    [fmt|{{Command: "Searge", auto: 1b, UpdateLastExecution: 0b}}|],
+  [fmt|setblock ~ ~ ~ minecraft:chain_command_block[facing=down]|] ++
+  [fmt|{{Command: {show mainCmd}, auto: 1b, UpdateLastExecution: 0b}}|],
+  [fmt|setblock ~ ~1 ~ minecraft:furnace{furnaceDat}|],
+  [fmt|setblock ~ ~-2 ~ minecraft:repeating_command_block[facing=up]|] ++
+    [fmt|{{Command: "setblock ~ ~ ~ minecraft:air", auto: 1b}}|]]
   where furnaceDat = "{Items: [{Slot: 0b, id: 'minecraft:redstone_block',\
           \ Count: 1b, tag: {stack: [], callstack:\
                              \ [{ret: 'function minelang:finish'}]}}]}"
 
+setup :: Block
+setup = [
+  [fmt|gamerule commandBlockOutput false|],
+  [fmt|scoreboard objectives add {math} dummy|],
+  [fmt|scoreboard players set a {math} 0|],
+  [fmt|scoreboard players set b {math} 0|]]
+
 finish :: Block
 finish = [
-  [f|tellraw @p {finalMsg}|],
-  [f|fill ~ ~-2 ~ ~ ~1 ~ minecraft:air|]]
+  [fmt|tellraw @p {finalMsg}|],
+  [fmt|fill ~ ~-2 ~ ~ ~1 ~ minecraft:air|]]
   where finalMsg :: String
         finalMsg =
-          [f|{{"block": "{storageSpot}", "nbt": "Items[0].tag.stack[0]"}}|]
+          [fmt|{{"block": "{storageSpot}", "nbt": "Items[0].tag.stack[0]"}}|]
 
 mod, rem, estore :: String
 mod = "data modify"
@@ -62,10 +69,10 @@ estore = "execute store result"
 source :: Source -> String
 source src = case src of
   -- NBT lists must be homogeneous, so we need to wrap ints into compounds
-  Lit (IntLit n) -> [f|value {{ival: {n}}}|]
-  Lit EmptyLit -> [f|value {{}}|]
-  Ref (OnStack ix) -> [f|from {stack}[{ix}]|]
-  Ref (InEnv sym) -> [f|from {env}.{show sym}|]
+  Lit (IntLit n) -> [fmt|value {{ival: {n}}}|]
+  Lit EmptyLit -> [fmt|value {{}}|]
+  Ref (OnStack ix) -> [fmt|from {stack}[{ix}]|]
+  Ref (InEnv sym) -> [fmt|from {env}.{show sym}|]
 
 append :: [Command] -> CompilerM ()
 append1 :: Command -> CompilerM ()
@@ -74,7 +81,7 @@ append cmds = modify go
 append1 = append . pure
 
 jump :: BlockId -> ProgramName -> Command
-jump (f', b) progName = [f|function minelang:{dir}f{f'}b{b}|]
+jump (f', b) progName = [fmt|function minelang:{dir}f{f'}b{b}|]
   where dir = maybe "" (++ "/") progName
 
 jump' :: BlockId -> CompilerM Command
@@ -82,50 +89,51 @@ jump' = asks . jump
 
 compileInstr :: Instruction -> CompilerM ()
 compileInstr instr = case instr of
-  StoreEnv sym src -> append1 [f|{mod} {env}.{show sym} set {source src}|]
-  Push ix src -> append1 [f|{mod} {stack} insert {ix} {source src}|]
-  Pop ix -> append1 [f|{rem} {stack}[{ix}]|]
+  StoreEnv sym src -> append1 [fmt|{mod} {env}.{show sym} set {source src}|]
+  Push ix src -> append1 [fmt|{mod} {stack} insert {ix} {source src}|]
+  Pop ix -> append1 [fmt|{rem} {stack}[{ix}]|]
   Insert key -> append [
-    [f|{mod} {stack}[0].{show key} set from {stack}[1]|],
-    [f|{rem} {stack}[1]|]]
+    [fmt|{mod} {stack}[0].{show key} set from {stack}[1]|],
+    [fmt|{rem} {stack}[1]|]]
   ProjInstr key -> append [
-    [f|{mod} {stack} prepend from {stack}[0].{show key}|],
-    [f|{rem} {stack}[1]|]]
+    [fmt|{mod} {stack} prepend from {stack}[0].{show key}|],
+    [fmt|{rem} {stack}[1]|]]
   ArithInstr op ->
     let opName = case op of Add -> "+="; Sub -> "-="; Mul -> "*="
     in append [
-      [f|{estore} score a {math} run data get {stack}[1].ival|],
-      [f|{estore} score b {math} run data get {stack}[0].ival|],
-      [f|{rem} {stack}[0]|],
-      [f|scoreboard players operation a {math} {opName} b {math}|],
-      [f|{estore} {stack}[0].ival int 1 run scoreboard players get a {math}|]]
+      [fmt|{estore} score a {math} run data get {stack}[1].ival|],
+      [fmt|{estore} score b {math} run data get {stack}[0].ival|],
+      [fmt|{rem} {stack}[0]|],
+      [fmt|scoreboard players operation a {math} {opName} b {math}|],
+      [fmt|{estore} {stack}[0].ival int 1 run scoreboard players get a {math}|]
+    ]
   MkFun procId -> do
     cmd <- jump' (procId, 0)
     append [
-      [f|{mod} {stack} prepend value {{cmd: {show cmd}}}|],
-      [f|{mod} {stack}[0].closure set from {env}|]]
+      [fmt|{mod} {stack} prepend value {{cmd: {show cmd}}}|],
+      [fmt|{mod} {stack}[0].closure set from {env}|]]
   Call -> do
     (procId, blockNo) <- gets fst
     let blockId' = (procId, blockNo + 1)
     cmd <- jump' blockId'
     append [
-      [f|{mod} {callstack} prepend value {{ret: {show cmd}}}|],
-      [f|{mod} {env} set from {stack}[0].closure|],
-      [f|{mod} block ~ ~ ~ Command set from {stack}[0].cmd|],
-      [f|{rem} {stack}[0]|]]
+      [fmt|{mod} {callstack} prepend value {{ret: {show cmd}}}|],
+      [fmt|{mod} {env} set from {stack}[0].closure|],
+      [fmt|{mod} block ~ ~ ~ Command set from {stack}[0].cmd|],
+      [fmt|{rem} {stack}[0]|]]
     modify (\(_, prog) -> (blockId', M.insert blockId' [] prog))
   IfKeyInstr key -> append [
-    [f|execute if data {stack}[0].{show key} run {rem} {stack}[1]|],
-    [f|execute unless data {stack}[0].{show key} run {rem} {stack}[2]|],
-    [f|{rem} {stack}[0]|]]
+    [fmt|execute if data {stack}[0].{show key} run {rem} {stack}[1]|],
+    [fmt|execute unless data {stack}[0].{show key} run {rem} {stack}[2]|],
+    [fmt|{rem} {stack}[0]|]]
   IfInstr -> append [
-    [f|{estore} score a {math} run data get {stack}[0].ival|],
-    [f|{rem} {stack}[0]|],
-    [f|execute unless score a {math} matches 0 run {rem} {stack}[0]|],
-    [f|execute if score a {math} matches 0 run {rem} {stack}[1]|]]
+    [fmt|{estore} score a {math} run data get {stack}[0].ival|],
+    [fmt|{rem} {stack}[0]|],
+    [fmt|execute unless score a {math} matches 0 run {rem} {stack}[0]|],
+    [fmt|execute if score a {math} matches 0 run {rem} {stack}[1]|]]
   CommandInstr cmd -> append [
-    [f|{mod} {stack} prepend value {{}}|],
-    [f|{estore} {stack}[0].ival int 1 run {cmd'}|]]
+    [fmt|{mod} {stack} prepend value {{}}|],
+    [fmt|{estore} {stack}[0].ival int 1 run {cmd'}|]]
     where cmd' = cmd >>= expand
           expand '$' = env ++ "."
           expand c = [c]
@@ -138,12 +146,12 @@ compileProc procId p = do
   mapM_ compileInstr (init p)
   case last p of
     Call -> append [
-      [f|{mod} {env} set from {stack}[0].closure|],
-      [f|{mod} block ~ ~ ~ Command set from {stack}[0].cmd|],
-      [f|{rem} {stack}[0]|]]
+      [fmt|{mod} {env} set from {stack}[0].closure|],
+      [fmt|{mod} block ~ ~ ~ Command set from {stack}[0].cmd|],
+      [fmt|{rem} {stack}[0]|]]
     i -> compileInstr i >> append [
-      [f|{mod} block ~ ~ ~ Command set from {callstack}[0].ret|],
-      [f|{rem} {callstack}[0]|]]
+      [fmt|{mod} block ~ ~ ~ Command set from {callstack}[0].ret|],
+      [fmt|{rem} {callstack}[0]|]]
 
 compileProg :: VM1.Program -> CompilerM ()
 compileProg = void . M.traverseWithKey compileProc

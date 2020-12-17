@@ -1,4 +1,6 @@
 .*.swp
+*.dyn_hi
+*.dyn_o
 # github says I should ignore these.
 # who am I to ignore github?
 dist

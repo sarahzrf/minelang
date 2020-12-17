@@ -10,9 +10,12 @@ import Parse
 import VM1
 import Commands
 
+functionsDir :: String
+functionsDir = "minelang_datapack" </> "data" </> "minelang" </> "functions"
+
 writeBlock :: ProgramName -> String -> Block -> IO ()
 writeBlock progName blockName block = do
-  let progDir  = maybe "functions" ("functions" </>) progName
+  let progDir  = maybe functionsDir (functionsDir </>) progName
       filename = progDir </> blockName <.> "mcfunction"
   createDirectoryIfMissing True progDir
   writeFile filename (unlines block)
@@ -26,7 +29,12 @@ writeProg progName (mainCmd, prog) = do
 
 main :: IO ()
 main = do
+  createDirectoryIfMissing True "minelang_datapack"
+  let pack = "{\"pack\": {\"pack_format\": 1, \"description\": \"minelang\"}}"
+  writeFile ("minelang_datapack" </> "pack" <.> "mcmeta") pack
+  writeBlock Nothing "setup" setup
   writeBlock Nothing "finish" finish
+
   filenames <- getArgs
   let single = length filenames == 1
   forM_ filenames $ \filename -> do
